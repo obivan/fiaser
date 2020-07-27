@@ -4,4 +4,4 @@
 ## [0.1.0] - 2020-07-27
 Начальная версия
 
-[0.1.0]: https://github.com/obivan/fiaser/compare/0.1.0...HEAD
+[0.1.0]: https://github.com/obivan/fiaser/compare/v0.1.0...HEAD
