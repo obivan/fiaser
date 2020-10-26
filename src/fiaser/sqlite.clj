@@ -1,41 +1,40 @@
 (ns fiaser.sqlite
   (:require [clojure.string :as string]
-            [clojure.core.async :as a]
             [camel-snake-kebab.core :as csk]
             [next.jdbc :as jdbc]
             [next.jdbc.sql :as sql]
-            [next.jdbc.result-set :as rs]
-            [fiaser.xml :as xml]))
+            [next.jdbc.result-set :as rs]))
 
 ;todo: primary & foreign keys, indexes
-;todo: PRAGMA foreign_keys = ON;
-;todo: custom indexes
 
 (def type-map {:integer "integer"
-               :byte    "integer"
-               :string  "text"
-               :date    "text"
+               :byte "integer"
+               :string "text"
+               :date "text"
                :boolean "boolean"
-               :empty   "text"})
+               :empty "text"})
 
-(defn- field-to-sql
+(defn field-ddl
   [field]
-  (str (:name field)
-       " "
-       ((:base field) type-map)
-       (when (= (:use field) :required) " not null")))
+  (let [field-name (:name field)
+        field-type ((:base field) type-map)
+        not-null? (= (:use field) :required)]
+    (string/join \space [field-name field-type (when not-null? "not null")])))
 
-(defn- gen-create-table
-  [xsd-schema]
-  (str "create table " (csk/->snake_case (:collection xsd-schema))
-       " ("
-       (string/join ", " (map field-to-sql (:fields xsd-schema)))
-       ")"))
+(defn create-table-ddl
+  [table-name table-fields]
+  (let [fields-ddl (map field-ddl table-fields)]
+    (format "create table %s (%s)" table-name (string/join ", " fields-ddl))))
 
-(defn create-table!
-  [schema ds]
-  (with-open [connection (jdbc/get-connection ds)]
-    (jdbc/execute! connection [(gen-create-table schema)])))
+(defn- create-table!
+  [datasource schema]
+  (let [table-name (csk/->snake_case (:collection schema))
+        table-fields (:fields schema)]
+    (jdbc/execute-one! datasource [(create-table-ddl table-name table-fields)])))
+
+(defn prepare-database!
+  [datasource schemas]
+  (run! (partial create-table! datasource) schemas))
 
 (defn make-datasource
   "Creates SQLite datasource according to the specified sqlite file path"
@@ -52,16 +51,3 @@
       (let [msg (.getMessage e)]
         (binding [*out* *err*]
           (println "skip row" row "because of error:" msg))))))
-
-(defn stream-to-table!
-  [xml-file schema ds]
-  (let [ch (a/chan 1000)
-        coll-name (:collection schema)
-        table-name (keyword (csk/->snake_case coll-name))
-        next-row #(a/<!! ch)]
-    (xml/stream-attrs! xml-file ch)
-    (jdbc/with-transaction [tx ds]
-      (loop [row (next-row)]
-        (when-not (nil? row)
-          (skip-insert! tx table-name row)
-          (recur (next-row)))))))

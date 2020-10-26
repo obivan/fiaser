@@ -1,10 +1,9 @@
 (ns fiaser.xml
   (:require [clojure.data.xml :as xml]
-            [clojure.core.async :as a]
             [clojure.java.io :as io]
             [fiaser.xsd :as xsd]))
 
-;samples
+;gar bugfix for:
 ;AS_CHANGE_HISTORY_20200629_80f0a427-0178-4b0c-80f1-3095362c70e8.XML
 ;AS_ADM_HIERARCHY_20200629_efc01487-c56a-4b05-9bcf-ae74d101efe8.XML
 ;AS_ADDRESS_OBJECT_DIVISION_20200629_c3c1158b-cd7f-4a94-abdd-fe978fa735f8.XML
@@ -18,14 +17,13 @@
                     "AS_MUN_HIERARCHY"
                     {:collection "AS_MUN_HIERARCHY"}})
 
-(defn stream-attrs!
-  [file-name ch]
-  (a/thread
-    (with-open [input-stream (io/input-stream file-name)]
-      (let [tree (xml/parse input-stream)]
-        (doseq [row (:content tree)]
-          (a/>!! ch (:attrs row)))
-        (a/close! ch)))))
+(defn stream
+  [input-stream]
+  (->> input-stream
+       xml/parse
+       :content
+       (map :attrs)
+       (seque 8000)))
 
 (defn top-tag
   [file-name]

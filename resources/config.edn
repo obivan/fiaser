@@ -1,0 +1,13 @@
+{:sources {:xml-dir "/path/to/fias/xml/data"
+           :xsd-dir "/path/to/fias/xml/schemes"}
+
+ :targets {:sqlite {:enabled? false
+                    :file "/path/to/fias.sqlite"}
+           :postgres {:enabled? true
+                      :host "localhost"
+                      :port 5432
+                      :user "postgres"
+                      :dbname "postgres"
+                      :schema "fias"
+                      ;:tablespace "fias"
+                      :password ""}}}

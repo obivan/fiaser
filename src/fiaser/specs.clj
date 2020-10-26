@@ -6,31 +6,35 @@
 (defmacro with-conformer
   [bind & body]
   `(s/conformer
-    (fn [~bind]
-      (try
-        ~@body
-        (catch Exception _#
-          ::s/invalid)))))
+     (fn [~bind]
+       (try
+         ~@body
+         (catch Exception _#
+           ::s/invalid)))))
 
 (s/def ::non-empty-string (every-pred string? not-empty))
+
+(defn- trim-xs-prefix [s] (string/replace-first s #"^xs:" ""))
+(defn- normalize-integer [s] (string/replace s #"^int$" "integer"))
 
 (s/def ::known-bases #{:integer :byte :string :date :boolean :long :empty})
 (s/def ::str->base
   (s/and ::non-empty-string
-         (with-conformer val
+         (with-conformer
+           val
            (-> val
-               (string/replace-first #"^xs:" "")
-               (string/replace #"^int$" "integer")
+               trim-xs-prefix
+               normalize-integer
                keyword))
          ::known-bases))
 
 (s/def ::->maybe-int
   (s/conformer
-   (fn [val]
-     (try
-       (Integer/parseInt val)
-       (catch Exception _e
-         val)))))
+    (fn [val]
+      (try
+        (Integer/parseInt val)
+        (catch Exception _e
+          val)))))
 
 (s/def ::maybe-int
   (s/and ::non-empty-string
