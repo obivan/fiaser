@@ -43,11 +43,27 @@
         opts {:builder-fn rs/as-unqualified-lower-maps}]
     (jdbc/with-options spec opts)))
 
+(defn make-row-stub
+  [schema]
+  (let [fields (:fields schema)]
+    (into {} (for [{:keys [name]} fields] [(keyword name) nil]))))
+
+(defn prepare-multi-insert
+  [schema rows]
+  (let [stub (make-row-stub schema)
+        cols (keys stub)
+        rows (map (partial merge stub) rows)]
+    [cols (map vals rows)]))
+
 (defn skip-insert!
-  [tx table-name row]
-  (try
-    (sql/insert! tx table-name row)
-    (catch Exception e
-      (let [msg (.getMessage e)]
-        (binding [*out* *err*]
-          (println "skip row" row "because of error:" msg))))))
+  [conn schema rows-batch]
+  (let [coll-name (:collection schema)
+        table-name (keyword (csk/->snake_case coll-name))
+        [cols rows] (prepare-multi-insert schema rows-batch)]
+    (try
+      (sql/insert-multi! conn table-name cols rows)
+      (catch Exception e
+        (let [msg (.getMessage e)]
+          (binding [*out* *err*]
+            (locking *out*
+              (println "skip row" rows-batch "because of error:" msg))))))))

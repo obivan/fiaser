@@ -62,5 +62,5 @@
     (jdbc/with-options spec opts)))
 
 (defn skip-insert!
-  [tx table-name row]
-  (sqlite/skip-insert! tx table-name row))
+  [conn schema rows-batch]
+  (sqlite/skip-insert! conn schema rows-batch))

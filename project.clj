@@ -1,4 +1,4 @@
-(defproject fiaser "0.2.0-SNAPSHOT"
+(defproject fiaser "0.3.0-SNAPSHOT"
   :description "Utilities for working with FIAS"
   :url "http://github.com/obivan/fiaser"
   :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"

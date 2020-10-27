@@ -6,7 +6,6 @@
             [fiaser.xml :as xml]
             [fiaser.sqlite :as sqlite]
             [fiaser.postgres :as pg]
-            [camel-snake-kebab.core :as csk]
             [next.jdbc :as jdbc])
   (:import (java.nio.file FileSystems)))
 
@@ -73,28 +72,26 @@
   (run! (fn [[_ v]] (.close v)) connections))
 
 (defmulti make-insert-handler :dbtype)
-(defmethod make-insert-handler :sqlite [_ [conn table-name]]
-  (partial sqlite/skip-insert! conn table-name))
-(defmethod make-insert-handler :postgres [_ [conn table-name]]
+(defmethod make-insert-handler :sqlite [_ [conn schema]]
+  (partial sqlite/skip-insert! conn schema))
+(defmethod make-insert-handler :postgres [_ [conn schema]]
   (jdbc/execute-one! conn ["set synchronous_commit = off"])
-  (partial pg/skip-insert! conn table-name))
+  (partial pg/skip-insert! conn schema))
 
 (defn make-insert-handlers
   [cons schema]
-  (let [coll-name (:collection schema)
-        table-name (keyword (csk/->snake_case coll-name))]
-    (into [] (for [[k v] cons]
-               (make-insert-handler {:dbtype k} [v table-name])))))
+  (into [] (for [[k v] cons] (make-insert-handler {:dbtype k} [v schema]))))
 
 (defn proceed-file
   [datasources file-name schema]
   (locking *out* (println "processing file" file-name))
   (with-open [input-stream (io/input-stream file-name)]
     (let [connections (open-connections datasources)
-          handlers (make-insert-handlers connections schema)]
-      (doseq [row (xml/stream input-stream)
+          handlers (make-insert-handlers connections schema)
+          batch-size 250]
+      (doseq [rows-batch (partition-all batch-size (xml/stream input-stream))
               handler handlers]
-        (apply handler [row]))
+        (apply handler [rows-batch]))
       (close-connections connections))))
 
 (defn proceed-data
@@ -103,16 +100,17 @@
   (let [scope (processing-scope xml-dir xsd-dir)
         schemas (set (vals scope))
         datasources (make-datasources targets)]
-    (println "creating tables ...")
-    (when-let [datasource (:sqlite datasources)]
-      (sqlite/prepare-database! datasource schemas))
-    (when-let [datasource (:postgres datasources)]
-      (let [pg-schema-name (-> targets :postgres :schema)
-            pg-tbs-name (or (-> targets :postgres :tablespace)
-                            "pg_default")]
-        (pg/prepare-database! datasource pg-schema-name pg-tbs-name schemas)))
-    (println "done")
-    (println "loading data ...")
-    (doall
-      (pmap (fn [[file schema]] (proceed-file datasources file schema)) scope))
-    (println "done")))
+    (when (not-empty datasources)
+      (println "creating tables ...")
+      (when-let [datasource (:sqlite datasources)]
+        (sqlite/prepare-database! datasource schemas))
+      (when-let [datasource (:postgres datasources)]
+        (let [pg-schema-name (-> targets :postgres :schema)
+              pg-tbs-name (or (-> targets :postgres :tablespace)
+                              "pg_default")]
+          (pg/prepare-database! datasource pg-schema-name pg-tbs-name schemas)))
+      (println "done")
+      (println "loading data ...")
+      (doall (pmap (fn [[file schema]]
+                     (proceed-file datasources file schema)) scope))
+      (println "done"))))

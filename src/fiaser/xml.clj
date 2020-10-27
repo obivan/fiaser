@@ -23,7 +23,7 @@
        xml/parse
        :content
        (map :attrs)
-       (seque 8000)))
+       (seque 500)))
 
 (defn top-tag
   [file-name]
